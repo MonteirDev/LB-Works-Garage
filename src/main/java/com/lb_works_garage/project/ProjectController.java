@@ -52,4 +52,20 @@ public class ProjectController {
         }
         return ResponseEntity.notFound().build();
     }
+
+    @GetMapping("/{id}/confirm")
+    public ResponseEntity<Project> confirmProject(@PathVariable UUID id){
+        Optional<Project> project = this.repository.findById(id);
+
+        if (project.isPresent()){
+            Project rawProject = project.get();
+            rawProject.setIsConfirmerd(true);
+
+            this.repository.save(rawProject);
+            this.participantService.triggerConfirmationEmailToParticipants(id);
+
+            return ResponseEntity.ok(rawProject);
+        }
+        return ResponseEntity.notFound().build();
+    }
 }
