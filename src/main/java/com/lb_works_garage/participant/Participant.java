@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.Locale;
 import java.util.UUID;
 
 @Entity
@@ -16,7 +17,7 @@ import java.util.UUID;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class Participants {
+public class Participant {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
@@ -31,9 +32,17 @@ public class Participants {
     private String function;
 
     @Column(name = "is_confirmed", nullable = false)
-    private Boolean isConfirmerd;
+    private Boolean isConfirmed;
 
     @ManyToOne
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
+
+    public Participant (String email, Project project){
+        this.email = email;
+        this.project = project;
+        this.isConfirmed = false;
+        this.name = "";
+        this.function = "";
+    }
 }

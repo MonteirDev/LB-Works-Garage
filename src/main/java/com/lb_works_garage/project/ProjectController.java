@@ -1,12 +1,14 @@
 package com.lb_works_garage.project;
 
-import com.lb_works_garage.participant.ParticipantService;
+import com.lb_works_garage.participant.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,7 +27,7 @@ public class ProjectController {
         Project newProject = new Project(payload);
 
         this.repository.save(newProject);
-        this.participantService.registerParticipantsToProject(payload.emails_to_invite(), newProject.getId());
+        this.participantService.registerParticipantsToProject(payload.emails_to_invite(), newProject);
 
         return ResponseEntity.ok(new ProjectCreateResponse(newProject.getId()));
     }
@@ -67,5 +69,27 @@ public class ProjectController {
             return ResponseEntity.ok(rawProject);
         }
         return ResponseEntity.notFound().build();
+    }
+
+    @PostMapping("/{id}/invite")
+    public ResponseEntity<ParticipantCreateResponse> inviteParticipant(@PathVariable UUID id, @RequestBody ParticipantRequestPayload payload){
+        Optional<Project> project = this.repository.findById(id);
+
+        if (project.isPresent()){
+            Project rawProject = project.get();
+            ParticipantCreateResponse participantResponse = this.participantService.registerParticipantToEvent(payload.email(),  rawProject);
+
+            if (rawProject.getIsConfirmerd()) this.participantService.triggerConfirmationEmailToParticipant(payload.email());
+
+            return ResponseEntity.ok(participantResponse);
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("/{id}/participants")
+    public ResponseEntity<List<ParticipantData>> getAllParticipants(@PathVariable UUID id){
+        List<ParticipantData> participantList = this.participantService.getAllParticipantsFromEvents(id);
+
+        return ResponseEntity.ok(participantList);
     }
 }
