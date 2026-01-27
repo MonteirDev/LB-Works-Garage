@@ -1,5 +1,9 @@
 package com.lb_works_garage.project;
 
+import com.lb_works_garage.activities.ActivityData;
+import com.lb_works_garage.activities.ActivityRequestPayload;
+import com.lb_works_garage.activities.ActivityResponse;
+import com.lb_works_garage.activities.ActivityService;
 import com.lb_works_garage.participant.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -7,7 +11,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +18,9 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/projects")
 public class ProjectController {
+
+    @Autowired
+    private ActivityService activityService;
 
     @Autowired
     private ParticipantService participantService;
@@ -92,4 +98,23 @@ public class ProjectController {
 
         return ResponseEntity.ok(participantList);
     }
+
+    @PostMapping("/{id}/activities")
+    public ResponseEntity<ActivityResponse> RegisterActivity(@PathVariable UUID id, @RequestBody ActivityRequestPayload payload){
+        Optional<Project> project = this.repository.findById(id);
+
+        if (project.isPresent()){
+            Project rawProject = project.get();
+            ActivityResponse activityResponse = this.activityService.RegisterActtivity(payload, rawProject);
+            return ResponseEntity.ok(activityResponse);
+        }
+        return ResponseEntity.notFound().build();
+    }
+    @GetMapping("/{id}/activities")
+    public ResponseEntity<List<ActivityData>> getAllActivities(@PathVariable UUID id){
+        List<ActivityData> activityDataList = this.activityService.getAllActivitiesFromId(id);
+
+        return ResponseEntity.ok(activityDataList);
+    }
+
 }

@@ -5,5 +5,5 @@ CREATE TABLE participants(
     function VARCHAR(255) NOT NULL,
     is_confirmed BOOLEAN NOT NULL,
     project_id UUID,
-    FOREIGN KEY (project_id) REFERENCES projects(id)
-)
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
