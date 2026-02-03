@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,14 +27,29 @@ public class ProjectController {
     private ParticipantService participantService;
 
     @Autowired
+    private ProjectService projectService;
+
+    @Autowired
     private ProjectRepository repository;
 
     @PostMapping
     public ResponseEntity<ProjectCreateResponse> createProject(@RequestBody ProjectRequestPayload payload){
         Project newProject = new Project(payload);
 
-        this.repository.save(newProject);
-        this.participantService.registerParticipantsToProject(payload.emails_to_invite(), newProject);
+        try {
+            LocalDateTime start = LocalDateTime.parse(payload.starts_at(), DateTimeFormatter.ISO_DATE_TIME);
+            LocalDateTime end = LocalDateTime.parse(payload.ends_at(), DateTimeFormatter.ISO_DATE_TIME);
+
+            if (!ProjectService.validationDateProject(start, end)){
+                return ResponseEntity.badRequest().build();
+            }
+
+            this.repository.save(newProject);
+            this.participantService.registerParticipantsToProject(payload.emails_to_invite(), newProject);
+
+        } catch (DateTimeParseException e){
+            throw new RuntimeException("Formato de data/hora inválido. Esperado padrão ISO (ex: 2024-05-20T10:00:00)");
+        }
 
         return ResponseEntity.ok(new ProjectCreateResponse(newProject.getId()));
     }
@@ -48,17 +64,28 @@ public class ProjectController {
     public ResponseEntity<Project> updateProject(@PathVariable UUID id, @RequestBody ProjectRequestPayload payload){
         Optional<Project> project = this.repository.findById(id);
 
-        if (project.isPresent()){
+        if (project.isEmpty()){
+            return ResponseEntity.notFound().build();
+        }
+
+        try {
             Project rawProject = project.get();
-            rawProject.setStartsAt(LocalDateTime.parse(payload.starts_at(), DateTimeFormatter.ISO_DATE_TIME));
-            rawProject.setEndsAt(LocalDateTime.parse(payload.ends_at(), DateTimeFormatter.ISO_DATE_TIME));
+            LocalDateTime start = LocalDateTime.parse(payload.starts_at(), DateTimeFormatter.ISO_DATE_TIME);
+            LocalDateTime end = LocalDateTime.parse(payload.ends_at(), DateTimeFormatter.ISO_DATE_TIME);
+
+            if (!ProjectService.validationDateProject(start, end)){
+                return ResponseEntity.badRequest().build();
+            }
+            rawProject.setStartsAt(start);
+            rawProject.setEndsAt(end);
             rawProject.setCarModel(payload.car_model());
 
             this.repository.save(rawProject);
-
             return ResponseEntity.ok(rawProject);
+
+        } catch (DateTimeParseException e){
+            throw new RuntimeException("Formato de data/hora inválido. Esperado padrão ISO (ex: 2024-05-20T10:00:00)");
         }
-        return ResponseEntity.notFound().build();
     }
 
     @GetMapping("/{id}/confirm")
@@ -103,12 +130,25 @@ public class ProjectController {
     public ResponseEntity<ActivityResponse> RegisterActivity(@PathVariable UUID id, @RequestBody ActivityRequestPayload payload){
         Optional<Project> project = this.repository.findById(id);
 
-        if (project.isPresent()){
+        if (project.isEmpty()){
+            return ResponseEntity.badRequest().build();
+        }
+
+        try {
             Project rawProject = project.get();
+            LocalDateTime startProject = rawProject.getStartsAt();
+            LocalDateTime endProject = rawProject.getEndsAt();
+            LocalDateTime dateActivity = LocalDateTime.parse(payload.occurs_at(), DateTimeFormatter.ISO_DATE_TIME);
+
+            if (!ActivityService.validationDateActivity(startProject, endProject, dateActivity)){
+                return ResponseEntity.badRequest().build();
+            }
             ActivityResponse activityResponse = this.activityService.RegisterActtivity(payload, rawProject);
             return ResponseEntity.ok(activityResponse);
+
+        } catch (DateTimeParseException e){
+            throw new RuntimeException("Formato de data/hora inválido. Esperado padrão ISO (ex: 2024-05-20T10:00:00)");
         }
-        return ResponseEntity.notFound().build();
     }
     @GetMapping("/{id}/activities")
     public ResponseEntity<List<ActivityData>> getAllActivities(@PathVariable UUID id){

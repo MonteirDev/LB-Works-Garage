@@ -5,6 +5,7 @@ import com.lb_works_garage.project.Project;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,5 +24,9 @@ public class ActivityService {
 
     public List<ActivityData> getAllActivitiesFromId(UUID projectId){
         return this.repository.findByProjectId(projectId).stream().map(activity -> new ActivityData(activity.getId(), activity.getTitle(), activity.getOccursAt())).toList();
+    }
+
+    public static boolean validationDateActivity(LocalDateTime StartProject, LocalDateTime EndProject, LocalDateTime DateActivity){
+        return DateActivity.isAfter(StartProject) && DateActivity.isBefore(EndProject);
     }
 }
