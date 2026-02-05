@@ -1,6 +1,5 @@
 package com.lb_works_garage.activities;
 
-import com.lb_works_garage.participant.ParticipantData;
 import com.lb_works_garage.project.Project;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -14,7 +13,7 @@ public class ActivityService {
 
     @Autowired
     private ActivityRepository repository;
-    public ActivityResponse RegisterActtivity(ActivityRequestPayload payload, Project project){
+    public ActivityResponse RegisterActivity(ActivityRequestPayload payload, Project project){
         Activity newActivity = new Activity(payload.title(), payload.occurs_at(), project);
 
         this.repository.save(newActivity);
@@ -26,7 +25,7 @@ public class ActivityService {
         return this.repository.findByProjectId(projectId).stream().map(activity -> new ActivityData(activity.getId(), activity.getTitle(), activity.getOccursAt())).toList();
     }
 
-    public static boolean validationDateActivity(LocalDateTime StartProject, LocalDateTime EndProject, LocalDateTime DateActivity){
+    public boolean validationDateActivity(LocalDateTime StartProject, LocalDateTime EndProject, LocalDateTime DateActivity){
         return DateActivity.isAfter(StartProject) && DateActivity.isBefore(EndProject);
     }
 }

@@ -1,9 +1,11 @@
 package com.lb_works_garage.participant;
 
+import com.lb_works_garage.exceptions.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.format.DateTimeParseException;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,20 +18,16 @@ public class ParticipantController {
 
     @PostMapping("/{id}/confirm")
     public ResponseEntity<Participant> confirmParticipants (@PathVariable UUID id, @RequestBody ParticipantRequestPayload payload){
-        Optional<Participant> participants = this.repository.findById(id);
+        Participant participants = this.repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Participants not found"));
 
-        if (participants.isPresent()){
-            Participant rawParticipant = participants.get();
-            rawParticipant.setIsConfirmed(true);
-            rawParticipant.setName(payload.name());
-            rawParticipant.setFunction(payload.function());
+        participants.setIsConfirmed(true);
+        participants.setName(payload.name());
+        participants.setFunction(payload.function());
 
-            this.repository.save(rawParticipant);
+        this.repository.save(participants);
 
 
-            return ResponseEntity.ok(rawParticipant);
-        }
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(participants);
     }
 
 }

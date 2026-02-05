@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 @Service
 public class ProjectService {
 
-    public static boolean validationDateProject(LocalDateTime StartAt, LocalDateTime EndsAt){
+    public boolean validationDateProject(LocalDateTime StartAt, LocalDateTime EndsAt){
         return EndsAt.isAfter(StartAt);
     }
 }

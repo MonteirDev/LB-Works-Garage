@@ -4,6 +4,9 @@ import com.lb_works_garage.activities.ActivityData;
 import com.lb_works_garage.activities.ActivityRequestPayload;
 import com.lb_works_garage.activities.ActivityResponse;
 import com.lb_works_garage.activities.ActivityService;
+import com.lb_works_garage.exceptions.ActivityOutsideProjectWindowException;
+import com.lb_works_garage.exceptions.InvalidRequestException;
+import com.lb_works_garage.exceptions.ResourceNotFoundException;
 import com.lb_works_garage.participant.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -11,9 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -35,88 +36,64 @@ public class ProjectController {
     @PostMapping
     public ResponseEntity<ProjectCreateResponse> createProject(@RequestBody ProjectRequestPayload payload){
         Project newProject = new Project(payload);
+        LocalDateTime start = LocalDateTime.parse(payload.starts_at(), DateTimeFormatter.ISO_DATE_TIME);
+        LocalDateTime end = LocalDateTime.parse(payload.ends_at(), DateTimeFormatter.ISO_DATE_TIME);
 
-        try {
-            LocalDateTime start = LocalDateTime.parse(payload.starts_at(), DateTimeFormatter.ISO_DATE_TIME);
-            LocalDateTime end = LocalDateTime.parse(payload.ends_at(), DateTimeFormatter.ISO_DATE_TIME);
-
-            if (!ProjectService.validationDateProject(start, end)){
-                return ResponseEntity.badRequest().build();
-            }
-
-            this.repository.save(newProject);
-            this.participantService.registerParticipantsToProject(payload.emails_to_invite(), newProject);
-
-        } catch (DateTimeParseException e){
-            throw new RuntimeException("Formato de data/hora inválido. Esperado padrão ISO (ex: 2024-05-20T10:00:00)");
+        if (!projectService.validationDateProject(start, end)){
+            throw new InvalidRequestException("Date invalid");
         }
+
+        this.repository.save(newProject);
+        this.participantService.registerParticipantsToProject(payload.emails_to_invite(), newProject);
 
         return ResponseEntity.ok(new ProjectCreateResponse(newProject.getId()));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Project> getProjectDetails(@PathVariable UUID id){
-        Optional<Project> project = this.repository.findById(id);
-        return project.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+        Project project = this.repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Project not found!"));
+        return ResponseEntity.ok(project);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Project> updateProject(@PathVariable UUID id, @RequestBody ProjectRequestPayload payload){
-        Optional<Project> project = this.repository.findById(id);
+        Project project = this.repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+        LocalDateTime start = LocalDateTime.parse(payload.starts_at(), DateTimeFormatter.ISO_DATE_TIME);
+        LocalDateTime end = LocalDateTime.parse(payload.ends_at(), DateTimeFormatter.ISO_DATE_TIME);
 
-        if (project.isEmpty()){
-            return ResponseEntity.notFound().build();
+        if (!projectService.validationDateProject(start, end)){
+            throw new InvalidRequestException("End date must be after start date.");
         }
+        project.setStartsAt(start);
+        project.setEndsAt(end);
+        project.setCarModel(payload.car_model());
 
-        try {
-            Project rawProject = project.get();
-            LocalDateTime start = LocalDateTime.parse(payload.starts_at(), DateTimeFormatter.ISO_DATE_TIME);
-            LocalDateTime end = LocalDateTime.parse(payload.ends_at(), DateTimeFormatter.ISO_DATE_TIME);
-
-            if (!ProjectService.validationDateProject(start, end)){
-                return ResponseEntity.badRequest().build();
-            }
-            rawProject.setStartsAt(start);
-            rawProject.setEndsAt(end);
-            rawProject.setCarModel(payload.car_model());
-
-            this.repository.save(rawProject);
-            return ResponseEntity.ok(rawProject);
-
-        } catch (DateTimeParseException e){
-            throw new RuntimeException("Formato de data/hora inválido. Esperado padrão ISO (ex: 2024-05-20T10:00:00)");
-        }
+        this.repository.save(project);
+        return ResponseEntity.ok(project);
     }
 
     @GetMapping("/{id}/confirm")
     public ResponseEntity<Project> confirmProject(@PathVariable UUID id){
-        Optional<Project> project = this.repository.findById(id);
-
-        if (project.isPresent()){
-            Project rawProject = project.get();
-            rawProject.setIsConfirmerd(true);
-
-            this.repository.save(rawProject);
-            this.participantService.triggerConfirmationEmailToParticipants(id);
-
-            return ResponseEntity.ok(rawProject);
+        Project project = this.repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+        if (project.getIsConfirmerd()){
+            throw new InvalidRequestException("This project is already confirmed");
         }
-        return ResponseEntity.notFound().build();
+        project.setIsConfirmerd(true);
+
+        this.repository.save(project);
+        this.participantService.triggerConfirmationEmailToParticipants(id);
+        return ResponseEntity.ok(project);
     }
 
     @PostMapping("/{id}/invite")
     public ResponseEntity<ParticipantCreateResponse> inviteParticipant(@PathVariable UUID id, @RequestBody ParticipantRequestPayload payload){
-        Optional<Project> project = this.repository.findById(id);
+        Project project = this.repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Project not found"));
 
-        if (project.isPresent()){
-            Project rawProject = project.get();
-            ParticipantCreateResponse participantResponse = this.participantService.registerParticipantToEvent(payload.email(),  rawProject);
+        ParticipantCreateResponse participantResponse = this.participantService.registerParticipantToEvent(payload.email(),  project);
 
-            if (rawProject.getIsConfirmerd()) this.participantService.triggerConfirmationEmailToParticipant(payload.email());
+        if (project.getIsConfirmerd()) this.participantService.triggerConfirmationEmailToParticipant(payload.email());
 
-            return ResponseEntity.ok(participantResponse);
-        }
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(participantResponse);
     }
 
     @GetMapping("/{id}/participants")
@@ -128,27 +105,15 @@ public class ProjectController {
 
     @PostMapping("/{id}/activities")
     public ResponseEntity<ActivityResponse> RegisterActivity(@PathVariable UUID id, @RequestBody ActivityRequestPayload payload){
-        Optional<Project> project = this.repository.findById(id);
+        Project project = this.repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+        LocalDateTime dateActivity = LocalDateTime.parse(payload.occurs_at(), DateTimeFormatter.ISO_DATE_TIME);
 
-        if (project.isEmpty()){
-            return ResponseEntity.badRequest().build();
+        if (!activityService.validationDateActivity(project.getStartsAt(), project.getEndsAt(), dateActivity)){
+            throw new ActivityOutsideProjectWindowException("The activity date is outside the project's timeframe");
         }
+        ActivityResponse activityResponse = this.activityService.RegisterActivity(payload, project);
+        return ResponseEntity.ok(activityResponse);
 
-        try {
-            Project rawProject = project.get();
-            LocalDateTime startProject = rawProject.getStartsAt();
-            LocalDateTime endProject = rawProject.getEndsAt();
-            LocalDateTime dateActivity = LocalDateTime.parse(payload.occurs_at(), DateTimeFormatter.ISO_DATE_TIME);
-
-            if (!ActivityService.validationDateActivity(startProject, endProject, dateActivity)){
-                return ResponseEntity.badRequest().build();
-            }
-            ActivityResponse activityResponse = this.activityService.RegisterActtivity(payload, rawProject);
-            return ResponseEntity.ok(activityResponse);
-
-        } catch (DateTimeParseException e){
-            throw new RuntimeException("Formato de data/hora inválido. Esperado padrão ISO (ex: 2024-05-20T10:00:00)");
-        }
     }
     @GetMapping("/{id}/activities")
     public ResponseEntity<List<ActivityData>> getAllActivities(@PathVariable UUID id){
